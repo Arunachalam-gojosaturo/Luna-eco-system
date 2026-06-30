@@ -1,22 +1,146 @@
+# 🌙 Luna Ecosystem (Luna OS X)
+
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+  <img src="public/background.png" alt="Luna OS X" width="100%" />
 </div>
 
-# Luna-eco-system
-LUNA OS X is an AI-powered operating system for Arch Linux featuring a Python-based AI brain, real-time voice interaction, long-term memory, intelligent Linux automation, and developer tools. It combines a modern desktop UI with a powerful assistant that can manage projects, control the system, and automate everyday tasks.
+<div align="center">
+  <strong>An AI-powered Operating System Ecosystem for Arch Linux</strong>
+</div>
 
-## Run and deploy your AI Studio app
+<br />
 
-This contains everything you need to run your app locally.
+<div align="center">
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#project-structure">Structure</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a>
+</div>
 
-View your app in AI Studio: https://ai.studio/apps/3fe05557-eadf-4fb0-9e7b-6ac9eb1ddab8
+## 🌌 Overview
 
-## Run Locally
+**Luna OS X** is an AI-powered operating system layer designed specifically for Arch Linux. It features a Python-based AI brain, real-time voice interaction, long-term memory, intelligent Linux automation, and developer tools. It combines a modern desktop UI with a powerful assistant that can manage projects, control the system, and automate everyday tasks.
 
-**Prerequisites:**  Node.js
+---
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## ✨ Key Features
+
+- 🧠 **AI Brain**: Powered by state-of-the-art LLMs, orchestrating multiple specialized agents.
+- 🗣️ **Real-Time Voice Interaction**: Seamless Speech-to-Text (STT) and Text-to-Speech (TTS) capabilities.
+- 🗄️ **Long-Term Memory**: Utilizes ChromaDB for semantic memory and SQLite for chat history, ensuring Luna remembers past interactions and context.
+- 🐧 **Linux Automation**: Deep integration with Linux. Agents can run commands, manage packages, and handle files.
+- 💻 **Developer Workspace**: Built-in developer tools and Git agents to assist with coding and repository management.
+- 🎨 **Modern UI**: A beautiful, fluid interface built with React, Tailwind CSS, and Framer Motion, packaged as a lightweight desktop app via **Tauri**.
+
+---
+
+## 🏗️ Architecture & Tech Stack
+
+### Frontend (Desktop App)
+- **Framework**: React 19 + TypeScript
+- **Styling**: Tailwind CSS + Motion (Framer)
+- **Desktop Runtime**: Tauri (Rust)
+- **Build Tool**: Vite
+
+### Backend (AI Brain)
+- **Framework**: FastAPI (Python)
+- **Memory**: ChromaDB (Vector Database) + SQLite
+- **Voice**: Edge TTS
+- **AI Core**: Modular architecture with Decision Engine, Planner, Executor, and Context Engine.
+
+---
+
+## 📂 Full Project Structure
+
+```text
+Luna-eco-system/
+├── backend/                  # Python FastAPI Backend & AI Logic
+│   ├── agents/               # Specialized AI Agents (Git, Linux, File, Package)
+│   ├── api/                  # REST and WebSocket API Routes
+│   ├── core/                 # Core AI logic (Brain, Planner, Orchestrator, Context)
+│   ├── memory/               # Memory Management (ChromaDB, SQLite, Summarizer)
+│   ├── providers/            # LLM Provider Integrations
+│   ├── tools/                # Tool Registries for Agents
+│   └── voice/                # STT and TTS engines
+├── src/                      # React Frontend Source
+│   ├── components/           # UI Components (DeveloperWorkspace, Settings, etc.)
+│   ├── App.tsx               # Main React Application
+│   └── index.css             # Tailwind CSS entry
+├── src-tauri/                # Tauri Rust Backend (Desktop Shell)
+│   ├── src/                  # Rust source code
+│   └── tauri.conf.json       # Tauri configuration
+├── dist/                     # Compiled Frontend build
+├── public/                   # Static Assets
+├── package.json              # Node.js dependencies & scripts
+├── requirements.txt          # Python dependencies
+├── server.py                 # Backend Entry Point
+└── cli.py                    # Command Line Interface
+```
+
+---
+
+## 🚀 Installation
+
+### Prerequisites
+- Node.js (v18+)
+- Python 3.10+
+- Rust & Cargo (for Tauri)
+- Arch Linux (recommended for full system integration)
+
+### Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Arunachalam-gojosaturo/Luna-eco-system.git
+   cd Luna-eco-system
+   ```
+
+2. **Install Frontend Dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Set up Python Virtual Environment:**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+4. **Environment Variables:**
+   Rename `.env.example` to `.env` and add your API keys:
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
+
+---
+
+## 💻 Usage
+
+### Run Locally (Development)
+You can start both the backend FastAPI server and the Vite frontend simultaneously with:
+```bash
+npm run dev
+```
+
+### Run Desktop App
+To run the project as a native desktop application using Tauri:
+```bash
+npm run desktop
+```
+
+### Build Desktop App
+To compile a production-ready binary for your system:
+```bash
+npm run desktop:build
+```
+
+---
+
+## 🛡️ License
+
+This project is licensed under the MIT License.
+
+---
+*Created by [Arunachalam](https://github.com/Arunachalam-gojosaturo)*

@@ -259,13 +259,27 @@ export default function App() {
     // Connect WebSocket
     const ws = new WebSocket("ws://localhost:3000/api/ws/events");
     
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      setCoreState('Error');
+      pushTerminalLog('[WS ERROR] WebSocket connection failed', 'error');
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket closed");
+      setCoreState('Offline');
+      pushTerminalLog('[WS] Connection closed', 'info');
+    };
+    
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "confirmation_required") {
           const { task_id, prompt } = data.payload;
           const confirmed = window.confirm(prompt);
-          ws.send(JSON.stringify({ type: "provide_confirmation", payload: { task_id, confirmed } }));
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "provide_confirmation", payload: { task_id, confirmed } }));
+          }
         } else if (data.type === "task_update") {
           const task = data.payload;
           
@@ -287,18 +301,38 @@ export default function App() {
       }
     };
     
-    return () => ws.close();
+    return () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("chatMessages", JSON.stringify(chatMessages));
+    try {
+      localStorage.setItem("chatMessages", JSON.stringify(chatMessages));
+    } catch (err) {
+      if (err instanceof Error && err.name === 'QuotaExceededError') {
+        console.warn("Storage quota exceeded, unable to save chat messages");
+      } else {
+        console.warn("Failed to save chat messages:", err);
+      }
+    }
   }, [chatMessages]);
 
   useEffect(() => {
-    localStorage.setItem("settingsConfig", JSON.stringify(settingsConfig));
-    localStorage.setItem("groqKey", settingsConfig.groqKey);
-    localStorage.setItem("openRouterKey", settingsConfig.openRouterKey);
-    localStorage.setItem("openaiKey", settingsConfig.openaiKey);
+    try {
+      localStorage.setItem("settingsConfig", JSON.stringify(settingsConfig));
+      localStorage.setItem("groqKey", settingsConfig.groqKey);
+      localStorage.setItem("openRouterKey", settingsConfig.openRouterKey);
+      localStorage.setItem("openaiKey", settingsConfig.openaiKey);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'QuotaExceededError') {
+        console.warn("Storage quota exceeded, unable to save settings");
+      } else {
+        console.warn("Failed to save settings:", err);
+      }
+    }
   }, [settingsConfig]);
 
   useEffect(() => {
@@ -474,7 +508,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           command: commandText,
-          history: chatHistory.slice(-20), // Send last 20 messages for context windowing
+          history: chatHistory.slice(-20),
           activeView,
           deviceStates: devices.map(d => ({ id: d.id, name: d.name, syncStatus: d.syncStatus, tasks: d.tasks })),
           groqKey: settingsConfig.groqKey,
@@ -485,9 +519,22 @@ export default function App() {
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
       const data = await response.json();
 
-      setCoreState(data.state || "Speaking");
+      // Validate response structure
+      if (!data || typeof data !== 'object' || !data.speech) {
+        throw new Error('Invalid API response structure');
+      }
+
+      // Validate and set core state (only allow valid CoreState values)
+      const validStates: CoreState[] = ['Idle', 'Listening', 'Thinking', 'Speaking', 'Executing', 'Warning', 'Offline', 'Error'];
+      const newState = validStates.includes(data.state) ? data.state : 'Speaking';
+      setCoreState(newState);
+      
       setSpeechText(data.speech);
       setIsThinking(false);
       

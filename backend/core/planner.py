@@ -24,7 +24,11 @@ class Planner:
         fast_keywords = {"what", "who", "where", "why", "how", "hello", "hi"}
         action_keywords = {"create", "debug", "install", "update", "search", "run", "make", "delete", "remove"}
         
-        if len(words) < 8 and not any(kw in user_input.lower() for kw in action_keywords):
+        # Check for specialized agent keywords first
+        has_specialized_keyword = any(kw in user_input.lower() for kw in ["git", "commit", "push", "pull", "file", "read", "write", "code", "package", "pacman"])
+        
+        # Only use fast path if short, no action keywords, AND no specialized keywords
+        if len(words) < 8 and not any(kw in user_input.lower() for kw in action_keywords) and not has_specialized_keyword:
             return ExecutionPlan(
                 depth=ReasoningDepth.FAST,
                 intent="casual_conversation",
@@ -41,7 +45,9 @@ class Planner:
         requires_conf = False
         depth = ReasoningDepth.NORMAL
         
-        if "install" in user_input or "remove" in user_input or "uninstall" in user_input or "search" in user_input and ("package" in user_input or "pacman" in user_input):
+        # Check for package management
+        if ("install" in user_input or "remove" in user_input or "uninstall" in user_input or 
+            ("search" in user_input and ("package" in user_input or "pacman" in user_input))):
             intent = "package_management"
             agents.append("package_manager")
             requires_conf = True

@@ -113,12 +113,14 @@ class LunaBrain:
 
         # 6. Get Response
         result_json = await self.provider_manager.get_json(messages, req)
-        if not result_json:
+        
+        # Validate response structure
+        if not isinstance(result_json, dict) or not result_json or "speech" not in result_json:
             result_json = {
                 "state": "Speaking",
-                "speech": "I couldn't generate a response.",
+                "speech": "I processed your request but couldn't generate a detailed response.",
                 "action": "NONE",
-                "logs": logs,
+                "logs": logs + ["[FALLBACK] Using default response"],
                 "notifications": []
             }
         else:

@@ -27,9 +27,15 @@ class AgentOrchestrator:
         
         for agent_name in plan.required_agents:
             agent = tool_registry.get_agent(agent_name)
-            if agent:
-                logs.append(f"[{agent_name.upper()} AGENT] Invoked.")
-                # We simply invoke it with a basic command for now
+            if not agent:
+                logs.append(f"[{agent_name.upper()} AGENT] ERROR: Agent not found.")
+                stderr += f"Agent {agent_name} not found. "
+                status = "error"
+                continue
+                
+            logs.append(f"[{agent_name.upper()} AGENT] Invoked.")
+            # We simply invoke it with a basic command for now
+            try:
                 exec_res = await agent.execute(plan.intent)
                 verified = await agent.verify(exec_res)
                 logs.append(f"[{agent_name.upper()} AGENT] Execution {'verified' if verified else 'failed verification'}.")
@@ -41,6 +47,10 @@ class AgentOrchestrator:
                 if not verified:
                     status = "error"
                     stderr += exec_res.get("stderr", "")
+            except Exception as e:
+                logs.append(f"[{agent_name.upper()} AGENT] Exception: {str(e)}")
+                stderr += f"Agent {agent_name} failed: {str(e)}. "
+                status = "error"
 
         return ExecutionData(
             status=status,

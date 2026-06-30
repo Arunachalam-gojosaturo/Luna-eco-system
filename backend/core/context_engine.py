@@ -38,7 +38,7 @@ class ContextEngine:
         while self._running:
             try:
                 # System metrics
-                self._state["cpu_usage"] = psutil.cpu_percent(interval=None)
+                self._state["cpu_usage"] = psutil.cpu_percent(interval=1.0)
                 self._state["ram_usage"] = psutil.virtual_memory().percent
                 self._state["disk_usage"] = psutil.disk_usage('/').percent
                 

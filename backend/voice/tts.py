@@ -1,7 +1,7 @@
 import os
 import uuid
 import edge_tts
-import requests
+import httpx
 
 async def generate_tts(req) -> bytes:
     tmp_file = f".tts-tmp-{uuid.uuid4().hex}.mp3"
@@ -17,8 +17,15 @@ async def generate_tts(req) -> bytes:
                 "model_id": "eleven_monolingual_v1",
                 "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}
             }
-            res = requests.post(f"https://api.elevenlabs.io/v1/text-to-speech/{req.voiceId or 'EXAVITQu4vr4xnSDxMaL'}", headers=headers, json=data)
-            return res.content
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                res = await client.post(
+                    f"https://api.elevenlabs.io/v1/text-to-speech/{req.voiceId or 'EXAVITQu4vr4xnSDxMaL'}",
+                    headers=headers,
+                    json=data
+                )
+                if not res.is_success:
+                    raise ValueError(f"ElevenLabs API error: {res.status_code} - {res.text}")
+                return res.content
         else:
             voice = req.voiceId or "en-US-AriaNeural"
             rate_str = f"+{int((req.speed - 1)*100)}%" if req.speed > 1 else f"{int((req.speed - 1)*100)}%" if req.speed != 1.0 else "+0%"
@@ -34,6 +41,8 @@ async def generate_tts(req) -> bytes:
             with open(tmp_file, "rb") as f:
                 audio_data = f.read()
             return audio_data
+    except Exception as e:
+        raise ValueError(f"TTS generation failed: {str(e)}")
     finally:
         if os.path.exists(tmp_file):
             os.remove(tmp_file)

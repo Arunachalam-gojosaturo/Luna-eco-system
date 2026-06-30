@@ -3,6 +3,7 @@ import json
 import httpx
 import asyncio
 import time
+import re
 from typing import Dict, Any, List, AsyncGenerator
 
 class ProviderManager:
@@ -26,24 +27,61 @@ class ProviderManager:
         await self.client.aclose()
 
     async def _post_json(self, url: str, headers: dict, data: dict, provider: str) -> dict:
+        """Post request with exponential backoff retry for rate limits."""
         start_time = time.time()
-        try:
-            resp = await self.client.post(url, headers=headers, json=data)
-            if resp.status_code == 429:
-                await asyncio.sleep(2)
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
                 resp = await self.client.post(url, headers=headers, json=data)
-            resp.raise_for_status()
-            
-            latency = time.time() - start_time
-            self.stats[provider]["latency"].append(latency)
-            return resp.json()
-        except Exception as e:
-            self.stats[provider]["failures"] += 1
-            if hasattr(e, 'response'):
-                print(f"[{provider}] Provider error: {e}. Body: {e.response.text}")
-            else:
-                print(f"[{provider}] Provider error: {e}")
-            return {}
+                
+                if resp.status_code == 429:
+                    # Rate limited - use exponential backoff
+                    wait_time = min(2 ** attempt, 30)  # Cap at 30 seconds
+                    print(f"[{provider}] Rate limited, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                    continue
+                    
+                resp.raise_for_status()
+                
+                latency = time.time() - start_time
+                self.stats[provider]["latency"].append(latency)
+                return resp.json()
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    self.stats[provider]["failures"] += 1
+                    print(f"[{provider}] Provider error (final attempt): {e}")
+                    return {}
+                # Retry on other errors
+                await asyncio.sleep(2 ** attempt)
+        
+        return {}
+
+    def _extract_json_from_content(self, content: str) -> Dict[str, Any] | None:
+        """Safely extract JSON from potentially wrapped content."""
+        try:
+            # Try direct JSON parsing first
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+        
+        # Try markdown code block extraction
+        match = re.search(r'```(?:json)?\s*(.*?)\s*```', content, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+        
+        # Try to find JSON object in text
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group(0))
+            except json.JSONDecodeError:
+                pass
+        
+        return None
 
     async def get_json(self, messages: List[Dict], req) -> Dict:
         """Fetch JSON from the selected provider, fallback if failed"""
@@ -51,7 +89,7 @@ class ProviderManager:
         provider = getattr(req, "activeProvider", "groq")
         
         # 1. Groq
-        if provider == "groq" and req.groqKey:
+        if provider == "groq" and getattr(req, "groqKey", None):
             headers = {"Authorization": f"Bearer {req.groqKey}", "Content-Type": "application/json"}
             data = {
                 "model": req.modelSelection or self.default_groq_model,
@@ -60,12 +98,13 @@ class ProviderManager:
             }
             res = await self._post_json("https://api.groq.com/openai/v1/chat/completions", headers, data, "groq")
             if res and "choices" in res:
-                content = res["choices"][0]["message"]["content"].strip()
-                if content.startswith("```json"):
-                    content = content[7:].strip()
-                if content.endswith("```"):
-                    content = content[:-3].strip()
-                return json.loads(content)
+                try:
+                    content = res["choices"][0]["message"]["content"].strip()
+                    parsed = self._extract_json_from_content(content)
+                    if parsed:
+                        return parsed
+                except (KeyError, IndexError, ValueError) as e:
+                    print(f"[groq] Failed to parse response: {e}")
                 
         # 2. Gemini
         if provider == "gemini":
@@ -84,10 +123,16 @@ class ProviderManager:
                 }
                 res = await self._post_json(url, {}, data, "gemini")
                 if res and "candidates" in res:
-                    return json.loads(res["candidates"][0]["content"]["parts"][0]["text"].strip())
+                    try:
+                        content = res["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        parsed = self._extract_json_from_content(content)
+                        if parsed:
+                            return parsed
+                    except (KeyError, IndexError, ValueError) as e:
+                        print(f"[gemini] Failed to parse response: {e}")
 
         # 3. OpenAI
-        if provider == "openai" and req.openaiKey:
+        if provider == "openai" and getattr(req, "openaiKey", None):
             headers = {"Authorization": f"Bearer {req.openaiKey}", "Content-Type": "application/json"}
             data = {
                 "model": req.modelSelection or self.default_openai_model,
@@ -97,7 +142,13 @@ class ProviderManager:
             }
             res = await self._post_json("https://api.openai.com/v1/chat/completions", headers, data, "openai")
             if res and "choices" in res:
-                return json.loads(res["choices"][0]["message"]["content"].strip())
+                try:
+                    content = res["choices"][0]["message"]["content"].strip()
+                    parsed = self._extract_json_from_content(content)
+                    if parsed:
+                        return parsed
+                except (KeyError, IndexError, ValueError) as e:
+                    print(f"[openai] Failed to parse response: {e}")
 
         return {}
 

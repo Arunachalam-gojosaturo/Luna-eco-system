@@ -3,6 +3,7 @@ import uuid
 import speech_recognition as sr
 from pydub import AudioSegment
 from fastapi import UploadFile
+import httpx
 
 async def transcribe_audio(audio: UploadFile) -> str:
     tmp_in = f".stt-tmp-in-{uuid.uuid4().hex}.webm"
@@ -19,22 +20,34 @@ async def transcribe_audio(audio: UploadFile) -> str:
         recognizer = sr.Recognizer()
         with sr.AudioFile(tmp_out) as source:
             audio_data = recognizer.record(source)
-            # The prompt mentions using Groq Whisper. I will implement a fallback to Google if Groq is not available
-            # Let's check for GROQ API key in env
+            # Check for Groq Whisper support
             groq_key = os.getenv("GROQ_API_KEY")
             if groq_key:
-                import requests
-                with open(tmp_out, "rb") as audio_file:
-                    headers = {"Authorization": f"Bearer {groq_key}"}
-                    files = {"file": ("audio.wav", audio_file, "audio/wav")}
-                    data = {"model": "whisper-large-v3-turbo"}
-                    res = requests.post("https://api.groq.com/openai/v1/audio/transcriptions", headers=headers, files=files, data=data)
-                    if res.ok:
-                        return res.json().get("text", "")
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    with open(tmp_out, "rb") as audio_file:
+                        headers = {"Authorization": f"Bearer {groq_key}"}
+                        files = {"file": ("audio.wav", audio_file, "audio/wav")}
+                        data = {"model": "whisper-large-v3-turbo"}
+                        try:
+                            res = await client.post(
+                                "https://api.groq.com/openai/v1/audio/transcriptions",
+                                headers=headers,
+                                files=files,
+                                data=data
+                            )
+                            if res.status_code == 200:
+                                return res.json().get("text", "")
+                        except Exception as e:
+                            print(f"Groq transcription error: {e}")
             
-            # Fallback to local / google
-            text = recognizer.recognize_google(audio_data)
-        return text
+            # Fallback to Google Speech Recognition
+            try:
+                text = recognizer.recognize_google(audio_data)
+                return text
+            except sr.UnknownValueError:
+                return "Could not understand the audio"
+            except sr.RequestError as e:
+                return f"Google Speech Recognition error: {e}"
     except Exception as e:
         print("Transcription error:", e)
         return ""
